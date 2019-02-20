@@ -49,6 +49,10 @@ uint8_t dataheader = 0x55;
 uint8_t payload_size = 10;
 double RPY[3] = {0};
 
+bool AccReady = false;
+bool AngleReady = false;
+bool GyroReady = false;
+
 
 struct SAcc
 {

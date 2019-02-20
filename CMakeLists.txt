@@ -19,7 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 ## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+ find_package(Boost REQUIRED COMPONENTS system)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -211,4 +211,4 @@ catkin_package(
 #  DEPENDS system_lib
 )
 add_executable(wit_imu_node src/wit_imu_node.cpp)
-target_link_libraries(wit_imu_node ${catkin_LIBRARIES})
+target_link_libraries(wit_imu_node ${catkin_LIBRARIES} ${Boost_LIBRARIES})

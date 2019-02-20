@@ -51,6 +51,8 @@ bool data_update(const unsigned char * incoming, unsigned int numberOfIncoming)
                         RPY[2] = (float)stcAngle.Angle[2]/32768*PI;
 
                       //printf("%.3f  %.3f  %.3f  \r\n", RPY[0], RPY[1], RPY[2]);
+                        if(!AngleReady)
+                            AngleReady = true;
 
                         findHeader = false;
                         state = waitingForHead;
@@ -75,7 +77,9 @@ bool data_update(const unsigned char * incoming, unsigned int numberOfIncoming)
                     {
                         memcpy(&stcAcc,&incoming[1],8);
 
-                        
+                        if(!AccReady)
+                            AccReady = true;
+
                         findHeader = false;
                         state = waitingForHead;
                         isconnect = true;
@@ -98,7 +102,10 @@ bool data_update(const unsigned char * incoming, unsigned int numberOfIncoming)
                     if(cs == checksum)
                     {
                         memcpy(&stcGyro,&incoming[1],8);
-                        
+
+                        if(!GyroReady)
+                            GyroReady = true;
+
                         findHeader = false;
                         state = waitingForHead;
                         isconnect = true;
@@ -195,7 +202,6 @@ int main(int argc, char** argv)
             last_getdata = ros::Time::now();
             
             imu_pub_data.header.frame_id = "/imu";
-            imu_pub_data.header.stamp = ros::Time::now();
 
 
             imu_pub_data.angular_velocity.x = (float)stcGyro.w[0]/32768*2000*(PI/180);
@@ -207,8 +213,18 @@ int main(int argc, char** argv)
             imu_pub_data.linear_acceleration.z = (float)stcAcc.a[2]/32768*16*9.8;
 
             imu_pub_data.orientation = tf::createQuaternionMsgFromRollPitchYaw(RPY[0],RPY[1],RPY[2]);
+            
+            if(AccReady & GyroReady & AngleReady)
+            {
+                imu_pub_data.header.stamp = ros::Time::now();
+                imu_pub.publish(imu_pub_data);
 
-            imu_pub.publish(imu_pub_data);
+                AccReady = false;
+                GyroReady = false;
+
+
+                AngleReady = false;
+            }
         }
     }
 
