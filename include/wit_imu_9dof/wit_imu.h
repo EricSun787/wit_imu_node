@@ -27,9 +27,13 @@ struct Imu_data{
 enum packetFinderState
 {
     waitingForHead,
-    waitingForPayloadSize,
+    waitingForPayloadType,
     waitingForPayload,
     waitingForCheckSum
+};
+enum FoundloadType
+{
+    acc = 1,speed=2,angle=3,none = 0
 };
 
 class IDHeader{
@@ -43,6 +47,7 @@ enum PayloadType
 Imu_data imu_data;
 uint8_t ready_get = 1;
 packetFinderState state = waitingForHead;
+FoundloadType found_type = none;
 bool findHeader = false;
 uint8_t checksum = 0x0;
 uint8_t dataheader = 0x55;
