@@ -22,25 +22,87 @@ bool data_update(const unsigned char * incoming, unsigned int numberOfIncoming)
              if(findHeader==false && (incoming[0] == dataheader))
                 {
                     findHeader = true;
-                    ready_get = 10;
-                    state = waitingForPayload;
+                    //ready_get = 10;
+                    //state = waitingForPayload;
+                    state = waitingForPayloadType;
+                    ready_get = 1;
+                    cs = 0x55;
+                    //printf("Header is %02X\n",incoming[0]);
                 }
         break;
-
+        case(waitingForPayloadType):
+            {
+                switch (incoming[0])
+                {
+                    case IDHeader::angle_acc:
+                        found_type = acc;
+                        ready_get = 9;
+                        state = waitingForPayload;
+                        cs += incoming[0];
+                        break;
+                    case IDHeader::angle:
+                        found_type = angle;
+                        ready_get = 9;
+                        state = waitingForPayload;
+                        cs += incoming[0];
+                        break;
+                    case IDHeader::angle_speed:
+                        found_type = speed;
+                        ready_get = 9;
+                        state = waitingForPayload;
+                        cs += incoming[0];
+                        break;
+                
+                    default:
+                        found_type = none;
+                        findHeader = false;
+                        state = waitingForHead;
+                        isconnect = true;
+                        ready_get = 1;
+                        //ROS_WARN("Can not find DATA_ID: %02X",incoming[0]);
+                        break;
+                }
+            }
+        break;
         case(waitingForPayload):
         {
-            switch(incoming[0])
+            switch(found_type)
             {
-                case IDHeader::angle:
-                    cs = 0x55;
-                    for(int i=0;i<9;i++)
+                case acc:
+                    for(int i=0;i<8;i++)
                     {
                         cs+=incoming[i];
                     }
-                    checksum = incoming[9];
+                    checksum = incoming[8];
                     if(cs == checksum)
                     {
-                        memcpy(&stcAngle,&incoming[1],8);
+                        memcpy(&stcAcc,&incoming[0],8);
+
+                        if(!AccReady)
+                            AccReady = true;
+
+                        findHeader = false;
+                        state = waitingForHead;
+                        isconnect = true;
+                        found_packet = true;
+                        ready_get = 1;
+                    }
+                    else
+                    {
+                       ROS_WARN("Angle Acc CheckSum ERROR! cs:%d  data:%d",cs,checksum);
+                       return false;
+                    }
+                break;
+
+                case angle:
+                    for(int i=0;i<8;i++)
+                    {
+                        cs+=incoming[i];
+                    }
+                    checksum = incoming[8];
+                    if(cs == checksum)
+                    {
+                        memcpy(&stcAngle,&incoming[0],8);
 
                         //printf("%.3f\r\n", (float)stcAngle.Angle[2]/32768*180);
                         //RPY[0] = (float)stcAngle.Angle[0]/32768*180;
@@ -66,42 +128,16 @@ bool data_update(const unsigned char * incoming, unsigned int numberOfIncoming)
                        return false;
                     }
                 break;
-                case IDHeader::angle_acc:
-                    cs = 0x55;
-                    for(int i=0;i<9;i++)
+
+                case speed:
+                    for(int i=0;i<8;i++)
                     {
                         cs+=incoming[i];
                     }
-                    checksum = incoming[9];
+                    checksum = incoming[8];
                     if(cs == checksum)
                     {
-                        memcpy(&stcAcc,&incoming[1],8);
-
-                        if(!AccReady)
-                            AccReady = true;
-
-                        findHeader = false;
-                        state = waitingForHead;
-                        isconnect = true;
-                        found_packet = true;
-                        ready_get = 1;
-                    }
-                    else
-                    {
-                       ROS_WARN("Angle Acc CheckSum ERROR! cs:%d  data:%d",cs,checksum);
-                       return false;
-                    }
-                break;
-                case IDHeader::angle_speed:
-                    cs = 0x55;
-                    for(int i=0;i<9;i++)
-                    {
-                        cs+=incoming[i];
-                    }
-                    checksum = incoming[9];
-                    if(cs == checksum)
-                    {
-                        memcpy(&stcGyro,&incoming[1],8);
+                        memcpy(&stcGyro,&incoming[0],8);
 
                         if(!GyroReady)
                             GyroReady = true;
@@ -119,12 +155,19 @@ bool data_update(const unsigned char * incoming, unsigned int numberOfIncoming)
                     }
                 break;
                 default:
-                        ROS_WARN("Can not find DATA_ID: %d",incoming[0]);
+			ROS_WARN("Not define this Header!");
+                        findHeader = false;
+                        state = waitingForHead;
+                        isconnect = true;
+                        ready_get = 1;
                 break;
-            }
-                    
 
+
+
+            }
         }
+            
+
     }
 
     return found_packet;
@@ -138,11 +181,23 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
     ros::NodeHandle nh_p("~");
     sensor_msgs::Imu imu_pub_data;
+    
+    imu_pub_data.orientation_covariance = {1e-6, 0, 0,
+					   0, 1e-6, 0,
+					   0, 0, 1e-6};
+    imu_pub_data.angular_velocity_covariance = {1e-6, 0, 0,
+						0, 1e-6, 0,
+						0, 0, 1e-6};
+    imu_pub_data.linear_acceleration_covariance = {1e-6, 0, 0,
+						   0, 1e-6, 0,
+						   0, 0, 1e-6};
+    ros::Publisher imu_pub = nh.advertise<sensor_msgs::Imu>("/imu_data",10);
 
-    ros::Publisher imu_pub = nh.advertise<sensor_msgs::Imu>("/imu",10);
-
-    std::string port = "/dev/ttyUSB0";
+    std::string port = "/dev/ttyUSB1";
     ros::param::get("~serial_port", port);
+ 
+    //ROS_INFO("Serial Port is %c",port);
+    std::cout << "Serial Port is " << port << std::endl;
 
     try
     {
@@ -154,6 +209,7 @@ int main(int argc, char** argv)
        sp.setBaudrate(115200);
        //串口设置timeout
        sp.setTimeout(to);
+       
        //打开串口
        sp.open();
     }
@@ -201,7 +257,7 @@ int main(int argc, char** argv)
             /****************************/
             last_getdata = ros::Time::now();
             
-            imu_pub_data.header.frame_id = "/imu";
+            imu_pub_data.header.frame_id = "base_imu_link";
 
 
             imu_pub_data.angular_velocity.x = (float)stcGyro.w[0]/32768*2000*(PI/180);
@@ -221,8 +277,6 @@ int main(int argc, char** argv)
 
                 AccReady = false;
                 GyroReady = false;
-
-
                 AngleReady = false;
             }
         }
